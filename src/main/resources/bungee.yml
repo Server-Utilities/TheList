@@ -1,0 +1,3 @@
+name: TheList
+version: '${project.version}'
+main: io.streamlined.thelist.TheList
