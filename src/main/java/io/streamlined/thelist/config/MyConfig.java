@@ -1,11 +1,11 @@
 package io.streamlined.thelist.config;
 
+import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.api.proxy.server.ServerInfo;
 import io.streamlined.thelist.TheList;
 import io.streamlined.thelist.config.bits.ServerTunnel;
 import lombok.Getter;
 import lombok.Setter;
-import net.md_5.bungee.api.ProxyServer;
-import net.md_5.bungee.api.config.ServerInfo;
 import tv.quaint.storage.resources.flat.simple.SimpleConfiguration;
 import tv.quaint.utils.MathUtils;
 
@@ -22,7 +22,7 @@ public class MyConfig extends SimpleConfiguration {
     private static Date lastLoaded = null;
 
     public MyConfig() {
-        super("config.yml", TheList.getInstance().getDataFolder(), false);
+        super("config.yml", TheList.getDataFolder(), false);
     }
 
     @Override
@@ -59,7 +59,8 @@ public class MyConfig extends SimpleConfiguration {
 
         loadedServerTunnels = serverTunnels;
 
-        for (ServerInfo serverInfo : ProxyServer.getInstance().getServers().values()) {
+        for (RegisteredServer server : TheList.getProxy().getAllServers()) {
+            ServerInfo serverInfo = server.getServerInfo();
             if (! serverTunnels.stream().map(ServerTunnel::getServerActualName).collect(Collectors.toList()).contains(serverInfo.getName())) {
                 createServerTunnelByServerName(serverInfo.getName());
             }

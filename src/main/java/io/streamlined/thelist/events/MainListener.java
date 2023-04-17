@@ -1,169 +1,181 @@
 package io.streamlined.thelist.events;
 
+import com.velocitypowered.api.event.ResultedEvent;
+import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.connection.PreLoginEvent;
+import com.velocitypowered.api.event.player.ServerConnectedEvent;
+import com.velocitypowered.api.event.proxy.ProxyPingEvent;
+import com.velocitypowered.api.proxy.InboundConnection;
+import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.api.proxy.server.ServerInfo;
+import com.velocitypowered.api.proxy.server.ServerPing;
+import com.velocitypowered.api.util.Favicon;
+import com.velocitypowered.api.util.ModInfo;
 import io.streamlined.thelist.TheList;
 import io.streamlined.thelist.config.bits.ServerTunnel;
+import io.streamlined.thelist.utils.ColorUtils;
 import lombok.Getter;
 import lombok.Setter;
-import net.md_5.bungee.api.ChatColor;
-import net.md_5.bungee.api.Favicon;
-import net.md_5.bungee.api.ProxyServer;
-import net.md_5.bungee.api.ServerPing;
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.TextComponent;
-import net.md_5.bungee.api.config.ServerInfo;
-import net.md_5.bungee.api.connection.Connection;
-import net.md_5.bungee.api.connection.PendingConnection;
-import net.md_5.bungee.api.connection.ProxiedPlayer;
-import net.md_5.bungee.api.event.PostLoginEvent;
-import net.md_5.bungee.api.event.PreLoginEvent;
-import net.md_5.bungee.api.event.ProxyPingEvent;
-import net.md_5.bungee.api.event.ServerConnectEvent;
-import net.md_5.bungee.api.plugin.Listener;
-import net.md_5.bungee.event.EventHandler;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import tv.quaint.utils.MathUtils;
 
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MainListener implements Listener {
+public class MainListener {
     @Getter @Setter
     private static ConcurrentSkipListMap<ServerTunnel, ServerPing> serverPingCache = new ConcurrentSkipListMap<>();
     @Getter @Setter
-    private static TextComponent alternateMotd = new TextComponent(ChatColor.translateAlternateColorCodes('&', "&c&lLoading&8... &e(&bPlease refresh&e)"));
+    private static Component alternateMotd = ColorUtils.colorize("&c&lLoading&8... &e(&bPlease refresh&e)");
     @Getter @Setter
-    private static ServerPing.PlayerInfo alternatePlayerInfo = new ServerPing.PlayerInfo(
-            ChatColor.translateAlternateColorCodes('&', "&c&lLoading&8... &e(&bPlease refresh&e)")
-            , "00000000-0000-0000-0000-000000000000");
+    private static ServerPing.SamplePlayer alternatePlayerInfo = new ServerPing.SamplePlayer(
+            "§c§lLoading§8... §e(§bPlease refresh§e)"
+            , UUID.fromString("00000000-0000-0000-0000-000000000000"));
 
     public MainListener() {
         TheList.getInstance().getLogger().info("MainListener has been registered!");
     }
 
-    @EventHandler
+    @Subscribe
     public void onPingServer(ProxyPingEvent event) {
         String hostName;
         try {
-            hostName = event.getConnection().getVirtualHost().getHostString();
+            if (event.getConnection().getVirtualHost().isPresent()) hostName = event.getConnection().getVirtualHost().get().getHostName();
+            else {
+                event.setPing(getDefaultFrom(event.getPing()));
+                return;
+            }
         } catch (Exception e) {
-            event.setResponse(getDefaultFrom(event.getResponse()));
+            event.setPing(getDefaultFrom(event.getPing()));
             return;
         }
 
         TheList.getMyConfig().getServerTunnels().forEach(serverTunnel -> {
             if (! serverTunnel.isPossibleHost(hostName)) return;
 
-            ServerInfo serverInfo = null;
+            RegisteredServer srv = null;
 
-            for (ServerInfo server : ProxyServer.getInstance().getServers().values()) {
+            for (RegisteredServer s : TheList.getProxy().getAllServers()) {
+                ServerInfo server = s.getServerInfo();
                 if (server.getName().equalsIgnoreCase(serverTunnel.getServerActualName())) {
-                    serverInfo = server;
+                    srv = s;
                     break;
                 }
             }
 
-            if (serverInfo != null) {
+            if (srv != null) {
                 if (serverTunnel.getLastPinged() != null && MathUtils.isDateOlderThan(serverTunnel.getLastPinged(), 5, ChronoUnit.SECONDS)) {
                     ServerPing serverPing = serverPingCache.get(serverTunnel);
                     if (serverPing != null) {
-                        event.setResponse(serverPing);
+                        event.setPing(serverPing);
                         return;
                     }
                 }
 
-                ServerPing original = event.getResponse();
-                ServerPing ping = onPing(serverInfo).completeOnTimeout(null, TheList.getMyConfig().getPingWaitMillis(), TimeUnit.MILLISECONDS).join();
+                ServerPing original = event.getPing();
+                ServerPing ping = onPing(srv).completeOnTimeout(null, TheList.getMyConfig().getPingWaitMillis(), TimeUnit.MILLISECONDS).join();
 
                 if (ping != null) {
-                    event.setResponse(ping);
+                    event.setPing(ping);
                     serverTunnel.setLastPinged(new Date());
                     serverPingCache.put(serverTunnel, ping);
                 } else {
-                    event.setResponse(getDefaultFrom(original));
+                    event.setPing(getDefaultFrom(original));
                 }
             }
         });
     }
 
-    public CompletableFuture<ServerPing> onPing(ServerInfo serverInfo) {
+    public CompletableFuture<ServerPing> onPing(RegisteredServer serverInfo) {
         return CompletableFuture.supplyAsync(() -> {
-            ServerPing response = new ServerPing();
+            ServerPing.Builder response = ServerPing.builder();
 
             CompletableFuture<ServerPing> future = new CompletableFuture<>();
 
-            serverInfo.ping((result, error) -> {
-                if (error != null) {
-                    // Handle the error.
-                    return;
-                }
+            ServerPing result = serverInfo.ping().join();
 
-                ServerPing.Players players = result.getPlayers();
-                response.setPlayers(players);
+            Optional<ServerPing.Players> players = result.getPlayers();
+            if (players.isPresent()) {
+                ServerPing.Players players1 = players.get();
+                response.onlinePlayers(players1.getOnline());
+                response.maximumPlayers(players1.getMax());
+                response.samplePlayers(players1.getSample().toArray(new ServerPing.SamplePlayer[0]));
+            }
 
-                BaseComponent motd = result.getDescriptionComponent();
-                response.setDescriptionComponent(motd);
+            Component motd = result.getDescriptionComponent();
+            response.description(motd);
 
-                ServerPing.ModInfo modInfo = result.getModinfo();
-                response.getModinfo().setModList(modInfo.getModList());
-                response.getModinfo().setType(modInfo.getType());
+            if (result.getModinfo().isPresent()) {
+                response.mods(result.getModinfo().get().getMods().toArray(new ModInfo.Mod[0]));
+                response.modType(result.getModinfo().get().getType());
+            }
 
-                Favicon favicon = result.getFaviconObject();
-                response.setFavicon(favicon);
+            Optional<Favicon> favicon = result.getFavicon();
+            favicon.ifPresent(response::favicon);
 
-                ServerPing.Protocol version = result.getVersion();
-                response.setVersion(version);
+            ServerPing.Version version = result.getVersion();
+            response.version(version);
 
-                future.complete(response);
-            });
-
-            return future.join();
+            return response.build();
         });
     }
 
-    @EventHandler
-    public void onConnect(ServerConnectEvent event) {
-        if (! event.getReason().equals(ServerConnectEvent.Reason.JOIN_PROXY)) return;
+    @Subscribe
+    public void onConnect(ServerConnectedEvent event) {
+        Player connection = event.getPlayer();
 
-        ProxiedPlayer player = event.getPlayer();
-        PendingConnection connection = player.getPendingConnection();
+        if (connection.getVirtualHost().isEmpty()) return;
+        String hostName = connection.getVirtualHost().get().getHostString();
 
-        String hostName = connection.getVirtualHost().getHostString();
-
-        TheList.getInstance().getLogger().info("Host: " + hostName);
+        TheList.getLogger().info("Host: " + hostName);
 
         TheList.getMyConfig().getServerTunnels().forEach(serverTunnel -> {
             if (! serverTunnel.isPossibleHost(hostName)) return;
 
-            ServerInfo serverInfo = null;
+            RegisteredServer srv = null;
 
-            for (ServerInfo server : ProxyServer.getInstance().getServers().values()) {
+            for (RegisteredServer s : TheList.getProxy().getAllServers()) {
+                ServerInfo server = s.getServerInfo();
                 if (server.getName().equalsIgnoreCase(serverTunnel.getServerActualName())) {
-                    serverInfo = server;
+                    srv = s;
                     break;
                 }
             }
 
-            if (serverInfo != null) event.setTarget(serverInfo);
-            else TheList.getInstance().getLogger().warning("ServerInfo for " + serverTunnel.getServerActualName() + " is null!");
+            if (srv != null) connection.createConnectionRequest(srv).connect();
+            else TheList.getLogger().warn("ServerInfo for " + serverTunnel.getServerActualName() + " is null!");
         });
     }
 
     public static ServerPing getDefaultFrom(ServerPing original) {
-        ServerPing response = new ServerPing();
-        response.setVersion(original.getVersion());
+        ServerPing.Builder response = ServerPing.builder();
+        response.version(original.getVersion());
 
-        ServerPing.PlayerInfo[] playerInfo = new ServerPing.PlayerInfo[1];
+        ServerPing.SamplePlayer[] playerInfo = new ServerPing.SamplePlayer[1];
         playerInfo[0] = getAlternatePlayerInfo();
+        response.samplePlayers(playerInfo);
 
-        ServerPing.Players players = new ServerPing.Players(original.getPlayers().getMax(), original.getPlayers().getOnline(), playerInfo);
+        if (original.getPlayers().isPresent()) {
+            response.maximumPlayers(original.getPlayers().get().getMax());
+            response.onlinePlayers(original.getPlayers().get().getOnline());
+        }
 
-        response.setPlayers(players);
-        response.setDescriptionComponent(getAlternateMotd());
-        response.getModinfo().setModList(original.getModinfo().getModList());
-        response.getModinfo().setType(original.getModinfo().getType());
-        return response;
+        response.description(getAlternateMotd());
+
+        if (original.getModinfo().isPresent()) {
+            response.mods(original.getModinfo().get().getMods().toArray(new ModInfo.Mod[0]));
+            response.modType(original.getModinfo().get().getType());
+        }
+
+        return response.build();
     }
 }
