@@ -1,0 +1,21 @@
+ext {
+    IMPL = [
+            'com.github.Server-Utilities:TheBase:master-SNAPSHOT',
+            'com.github.ben-manes.caffeine:caffeine:3.1.8',
+    ]
+    SHADOW = [
+            'com.github.Server-Utilities:TheBase:master-SNAPSHOT',
+            'com.github.ben-manes.caffeine:caffeine:3.1.8',
+    ]
+    ANNO = [
+            'com.github.Server-Utilities:TheBase:master-SNAPSHOT',
+            'net.md-5:bungeecord-api:1.21-R0.1-SNAPSHOT',
+    ]
+    COMP_ONLY = [
+            'net.md-5:bungeecord-api:1.21-R0.1-SNAPSHOT',
+    ]
+    FILES = [
+    ]
+    OTHER_PLUGINS = [
+    ]
+}

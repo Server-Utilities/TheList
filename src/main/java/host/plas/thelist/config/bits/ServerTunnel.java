@@ -1,8 +1,9 @@
-package io.streamlined.thelist.config.bits;
+package host.plas.thelist.config.bits;
 
+import host.plas.thelist.utils.TunnelManager;
 import lombok.Getter;
 import lombok.Setter;
-import org.checkerframework.checker.initialization.qual.FBCBottom;
+import net.md_5.bungee.api.ProxyServer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Date;
@@ -10,18 +11,14 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+@Setter
+@Getter
 public class ServerTunnel implements Comparable<ServerTunnel> {
-    @Getter @Setter
     private String serverActualName;
-    @Getter @Setter
     private String serverDisplayName;
-    @Getter @Setter
     private ConcurrentSkipListSet<String> possibleHosts;
-    @Getter @Setter
     private boolean blockBungeeMessages;
-    @Getter @Setter
     private ConcurrentSkipListSet<UUID> canEdit;
-    @Getter @Setter
     private Date lastPinged;
 
     public ServerTunnel(String serverActualName, String serverDisplayName, ConcurrentSkipListSet<String> possibleHosts, boolean blockBungeeMessages, ConcurrentSkipListSet<UUID> canEdit) {
@@ -88,6 +85,15 @@ public class ServerTunnel implements Comparable<ServerTunnel> {
         }
     }
 
+    @Override
+    public int compareTo(@NotNull ServerTunnel o) {
+        return serverActualName.compareTo(o.serverActualName);
+    }
+
+    public boolean is(String serverActualName) {
+        return this.serverActualName.equalsIgnoreCase(serverActualName);
+    }
+
     public static ConcurrentSkipListSet<UUID> toUUIDSet(ConcurrentSkipListSet<String> stringSet) {
         ConcurrentSkipListSet<UUID> uuidSet = new ConcurrentSkipListSet<>();
         stringSet.forEach(uuid -> {
@@ -114,8 +120,21 @@ public class ServerTunnel implements Comparable<ServerTunnel> {
         return stringSet;
     }
 
-    @Override
-    public int compareTo(@NotNull ServerTunnel o) {
-        return serverActualName.compareTo(o.serverActualName);
+    public void poll() {
+        if (! validate()) {
+            TunnelManager.deleteTunnel(this);
+        }
+    }
+
+    public boolean validate() {
+        AtomicBoolean valid = new AtomicBoolean(false);
+
+        ProxyServer.getInstance().getServers().forEach((string, serverInfo) -> {
+            if (valid.get()) return;
+
+            if (serverInfo.getName().equals(getServerActualName())) valid.set(true);
+        });
+
+        return valid.get();
     }
 }
