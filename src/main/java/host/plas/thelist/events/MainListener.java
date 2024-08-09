@@ -1,6 +1,7 @@
 package host.plas.thelist.events;
 
 import host.plas.thelist.TheList;
+import host.plas.thelist.utils.Logger;
 import host.plas.thelist.utils.PingManager;
 import host.plas.thelist.utils.TunnelManager;
 import net.md_5.bungee.api.ProxyServer;
@@ -20,7 +21,7 @@ public class MainListener implements Listener {
     public MainListener() {
         ProxyServer.getInstance().getPluginManager().registerListener(TheList.getInstance(), this);
 
-        TheList.getInstance().getLogger().info("MainListener has been registered!");
+        Logger.logInfo("MainListener has been registered!");
     }
 
     @EventHandler
@@ -51,7 +52,7 @@ public class MainListener implements Listener {
 
         String hostName = connection.getVirtualHost().getHostString();
 
-        TheList.getInstance().getLogger().info(event.getPlayer().getName() + " is using host address: " + hostName);
+        Logger.logInfo(event.getPlayer().getName() + " is using host address: " + hostName);
 
         TunnelManager.collectAndDo(tunnel -> {
             if (! tunnel.isPossibleHost(hostName)) return;
@@ -66,7 +67,7 @@ public class MainListener implements Listener {
             }
 
             if (serverInfo != null) event.setTarget(serverInfo);
-            else TheList.getInstance().getLogger().warning("ServerInfo for " + tunnel.getServerActualName() + " is null!");
+            else Logger.logWarning("ServerInfo for " + tunnel.getServerActualName() + " is null!");
         });
     }
 

@@ -10,6 +10,8 @@ public class MyConfig extends SimpleConfiguration {
 
     @Override
     public void init() {
+        TheList.setMainConfig(this);
+
         getDefaultServerHostSuffix();
 
         getPingWaitMillis();

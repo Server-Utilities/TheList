@@ -2,6 +2,7 @@ package host.plas.thelist.config;
 
 import host.plas.thelist.TheList;
 import host.plas.thelist.config.bits.ServerTunnel;
+import host.plas.thelist.utils.Logger;
 import host.plas.thelist.utils.TunnelManager;
 import net.md_5.bungee.api.ProxyServer;
 import net.md_5.bungee.api.config.ServerInfo;
@@ -18,6 +19,8 @@ public class TunnelConfig extends SimpleConfiguration {
 
     @Override
     public void init() {
+        TheList.setTunnelConfig(this);
+
         reloadConfig();
     }
 
@@ -73,7 +76,7 @@ public class TunnelConfig extends SimpleConfiguration {
 
         saveServerTunnel(tunnel);
 
-        TheList.getInstance().getLogger().info("Created server tunnel for " + serverName + " with host " + serverHost);
+        Logger.logInfo("Created server tunnel for " + serverName + " with host " + serverHost);
 
         return tunnel;
     }

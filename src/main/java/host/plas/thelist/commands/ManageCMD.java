@@ -1,20 +1,19 @@
 package host.plas.thelist.commands;
 
+import host.plas.thelist.TheList;
 import host.plas.thelist.config.bits.ServerTunnel;
 import host.plas.thelist.utils.ColorUtils;
 import host.plas.thelist.utils.TunnelManager;
 import host.plas.thelist.utils.UuidUtils;
 import net.md_5.bungee.api.CommandSender;
-import net.md_5.bungee.api.plugin.Command;
-import net.md_5.bungee.api.plugin.TabExecutor;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class ManageCMD extends Command implements TabExecutor {
+public class ManageCMD extends FunCommand {
     public ManageCMD() {
-        super("managetunnels", "thelist.commands.manage.base", "thelist");
+        super(TheList.getInstance(), "manageservers", "thelist.commands.manage.base", "thelist");
     }
 
     @Override

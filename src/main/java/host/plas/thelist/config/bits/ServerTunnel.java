@@ -4,9 +4,11 @@ import host.plas.thelist.utils.TunnelManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.md_5.bungee.api.ProxyServer;
+import net.md_5.bungee.api.config.ServerInfo;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Date;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -83,6 +85,10 @@ public class ServerTunnel implements Comparable<ServerTunnel> {
             e.printStackTrace();
             return false;
         }
+    }
+
+    public Optional<ServerInfo> getServerInfo() {
+        return TunnelManager.getServerInfo(this);
     }
 
     @Override

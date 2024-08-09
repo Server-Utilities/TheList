@@ -2,6 +2,7 @@ package host.plas.thelist.utils;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import host.plas.thelist.TheList;
 import host.plas.thelist.config.bits.ServerTunnel;
 import lombok.Getter;
 import lombok.Setter;
@@ -13,7 +14,6 @@ import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
 import net.md_5.bungee.api.config.ServerInfo;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,7 +35,7 @@ public class PingManager {
 
     @Getter @Setter
     private static Cache<String, ServerPing> cache = Caffeine.newBuilder()
-            .expireAfterWrite(2, TimeUnit.SECONDS)
+            .expireAfterWrite(10, TimeUnit.SECONDS)
             .build();
 
     public static ServerPing getDefaultFrom(ServerPing original, GrabPingType type) {
@@ -61,74 +61,91 @@ public class PingManager {
     }
 
     public static ServerPing getFromCache(ServerPing original, String hostName) {
-        AtomicReference<ServerPing> response = new AtomicReference<>(getDefaultFrom(original, GrabPingType.NULL_SERVER));
+        AtomicReference<ServerPing> response = new AtomicReference<>(null);
 
-        getTunnel(hostName).ifPresent(tunnel -> {
-            ServerPing ping = getCache().getIfPresent(tunnel.getServerActualName());
-            if (ping == null) {
-                response.set(getDefaultFrom(original, GrabPingType.TIMEOUT));
+        TunnelManager.getTunnelByHosts(hostName).ifPresent(tunnel -> {
+            ServerPing gotten = getCache().get(hostName.toLowerCase(), key -> buildPing(original, tunnel));
 
-                CompletableFuture.runAsync(() -> {
-                    ServerPing p = buildPing(original, tunnel);
-                    getCache().put(tunnel.getServerActualName(), p);
-                });
-                return;
+            if (gotten != null) {
+                response.set(gotten);
             }
-            response.set(ping);
         });
+
+        if (response.get() == null) {
+            response.set(getDefaultFrom(original, GrabPingType.NULL_SERVER));
+        }
+
         return response.get();
     }
 
-    public static Optional<ServerTunnel> getTunnel(String hostName) {
-        return TunnelManager.getLoadedTunnels().stream().filter(tunnel -> tunnel.isPossibleHost(hostName)).findFirst();
+    public static ServerPing buildPing(ServerPing original, ServerTunnel tunnel) {
+        return buildPing(original, tunnel, false);
     }
 
-    public static ServerPing buildPing(ServerPing original, ServerTunnel tunnel) {
-        ServerInfo serverInfo = null;
+    public static ServerPing buildPing(ServerPing original, ServerTunnel tunnel, boolean async) {
+        AtomicReference<ServerPing> response = new AtomicReference<>(null);
 
-        for (ServerInfo server : ProxyServer.getInstance().getServers().values()) {
-            if (server.getName().equalsIgnoreCase(tunnel.getServerActualName())) {
-                serverInfo = server;
-                break;
+        tunnel.getServerInfo().ifPresent(serverInfo -> {
+            if (async) {
+                onPing(serverInfo).thenAccept(ping -> {
+                    try {
+                        getCache().invalidate(tunnel.getServerActualName().toLowerCase());
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                    getCache().put(tunnel.getServerActualName().toLowerCase(), ping);
+                });
+            } else {
+                onPing(serverInfo).thenAccept(response::set).join();
             }
+        });
+
+        if (response.get() == null) {
+            response.set(getDefaultFrom(original, GrabPingType.NULL_SERVER));
         }
 
-        if (serverInfo == null) return getDefaultFrom(original, GrabPingType.NULL_SERVER);
-        return getDefaultFrom(onPing(serverInfo).join());
+        return response.get();
     }
 
     public static CompletableFuture<ServerPing> onPing(ServerInfo serverInfo) {
         return CompletableFuture.supplyAsync(() -> {
-            ServerPing response = new ServerPing();
+            AtomicReference<ServerPing> atomicReference = new AtomicReference<>(null);
 
-            CompletableFuture<ServerPing> future = new CompletableFuture<>();
+            serverInfo.ping((callback, error) -> {
+                ServerPing response = new ServerPing();
 
-            serverInfo.ping((result, error) -> {
                 if (error != null) {
-                    // Handle the error.
+                    Logger.logInfo("Error pinging server: " + serverInfo.getName());
+                    Logger.logWarning(error);
+
+                    atomicReference.set(getDefaultFrom(response, GrabPingType.NULL_SERVER));
                     return;
                 }
 
-                ServerPing.Players players = result.getPlayers();
+                ServerPing.Players players = callback.getPlayers();
                 response.setPlayers(players);
 
-                BaseComponent motd = result.getDescriptionComponent();
+                BaseComponent motd = callback.getDescriptionComponent();
                 response.setDescriptionComponent(motd);
 
-                ServerPing.ModInfo modInfo = result.getModinfo();
+                ServerPing.ModInfo modInfo = callback.getModinfo();
                 response.getModinfo().setModList(modInfo.getModList());
                 response.getModinfo().setType(modInfo.getType());
 
-                Favicon favicon = result.getFaviconObject();
+                Favicon favicon = callback.getFaviconObject();
                 response.setFavicon(favicon);
 
-                ServerPing.Protocol version = result.getVersion();
+                ServerPing.Protocol version = callback.getVersion();
                 response.setVersion(version);
 
-                future.complete(response);
+                atomicReference.set(response);
             });
 
-            return future.join();
+            while (atomicReference.get() == null) {
+                Thread.onSpinWait();
+            }
+
+            return atomicReference.get();
         });
     }
 }

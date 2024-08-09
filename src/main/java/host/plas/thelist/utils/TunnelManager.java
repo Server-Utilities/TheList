@@ -4,9 +4,12 @@ import host.plas.thelist.TheList;
 import host.plas.thelist.config.bits.ServerTunnel;
 import lombok.Getter;
 import lombok.Setter;
+import net.md_5.bungee.api.ProxyServer;
+import net.md_5.bungee.api.config.ServerInfo;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class TunnelManager {
@@ -27,6 +30,10 @@ public class TunnelManager {
 
     public static Optional<ServerTunnel> getTunnel(String serverName) {
         return getLoadedTunnels().stream().filter(tunnel -> tunnel.is(serverName)).findFirst();
+    }
+
+    public static Optional<ServerTunnel> getTunnelByHosts(String hostname) {
+        return getLoadedTunnels().stream().filter(tunnel -> tunnel.isPossibleHost(hostname)).findFirst();
     }
 
     public static boolean hasTunnel(String serverName) {
@@ -54,5 +61,21 @@ public class TunnelManager {
 
     public static void collectAndDo(Consumer<ServerTunnel> consumer) {
         getLoadedTunnels().forEach(consumer);
+    }
+
+    public static Optional<ServerInfo> getServerInfo(String serverActualName) {
+        AtomicReference<ServerInfo> serverInfo = new AtomicReference<>(null);
+
+        ProxyServer.getInstance().getServers().forEach((string, info) -> {
+            if (serverInfo.get() != null) return;
+
+            if (info.getName().equals(serverActualName)) serverInfo.set(info);
+        });
+
+        return Optional.ofNullable(serverInfo.get());
+    }
+
+    public static Optional<ServerInfo> getServerInfo(ServerTunnel tunnel) {
+        return getServerInfo(tunnel.getServerActualName());
     }
 }

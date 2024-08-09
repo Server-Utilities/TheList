@@ -1,5 +1,6 @@
 package host.plas.thelist;
 
+import host.plas.thelist.commands.ManageCMD;
 import host.plas.thelist.config.MyConfig;
 import host.plas.thelist.config.TunnelConfig;
 import host.plas.thelist.events.MainListener;
@@ -32,8 +33,8 @@ public final class TheList extends Plugin implements IPluginEventable {
         // Plugin startup logic
         instance = this;
 
-        mainConfig = new MyConfig();
-        tunnelConfig = new TunnelConfig();
+        new MyConfig(); // set automatically
+        new TunnelConfig(); // set automatically
 
         mainListener = new MainListener();
 
@@ -42,6 +43,8 @@ public final class TheList extends Plugin implements IPluginEventable {
 
             tunnelConfig.reloadConfig();
         }, 0L, 5L, TimeUnit.SECONDS);
+
+        new ManageCMD();
     }
 
     @Override
